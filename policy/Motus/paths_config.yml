@@ -4,7 +4,7 @@
 # ============================================================================
 # Core Paths - MUST MODIFY THESE
 # ============================================================================
-robotwin_root: "..."     # e.g., "/path/to/RoboTwin"
+robotwin_root: "/scratch/ows/argus/extern/RoboTwin"     # e.g., "/path/to/RoboTwin"
 conda_env: "..."         # e.g., "/path/to/miniconda3/envs/RoboTwin"
 checkpoint_path: "..."   # (directory containing mp_rank_00_model_states.pt)
 
