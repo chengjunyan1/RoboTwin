@@ -23,6 +23,38 @@ from openpi.shared import download
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
 import os
+from pathlib import Path
+
+DEFAULT_ROBOTWIN_HF_REPO = "motus-robotics/pi0.5_robotwin2"
+DEFAULT_ROBOTWIN_CONFIG = "pi05_base_finetune_on_robotwin_clean_randomized_joint_training"
+DEFAULT_ROBOTWIN_MODEL = "pi0.5_robotwin2"
+
+
+def _maybe_download_default_checkpoint(checkpoint_dir):
+    checkpoint_dir = Path(checkpoint_dir)
+    model_path = checkpoint_dir / "model.safetensors"
+    assets_path = checkpoint_dir / "assets"
+    if model_path.exists() and assets_path.is_dir():
+        return
+
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise RuntimeError(
+            "Default pi0.5 RoboTwin checkpoint is missing and huggingface_hub is not installed. "
+            f"Install it or download {DEFAULT_ROBOTWIN_HF_REPO} into {checkpoint_dir}."
+        ) from exc
+
+    print(f"Downloading {DEFAULT_ROBOTWIN_HF_REPO} to {checkpoint_dir} ...")
+    snapshot_download(
+        repo_id=DEFAULT_ROBOTWIN_HF_REPO,
+        local_dir=str(checkpoint_dir),
+        allow_patterns=[
+            "model.safetensors",
+            "metadata.pt",
+            "assets/**",
+        ],
+    )
 
 class PI0:
 
@@ -31,14 +63,25 @@ class PI0:
         self.model_name = model_name
         self.checkpoint_id = checkpoint_id
 
-        specified_path = f"policy/pi05/checkpoints/{self.train_config_name}/{self.model_name}/{self.checkpoint_id}/assets/"
+        checkpoint_dir = f"policy/pi05/checkpoints/{self.train_config_name}/{self.model_name}/{self.checkpoint_id}"
+        if self.train_config_name == DEFAULT_ROBOTWIN_CONFIG and self.model_name == DEFAULT_ROBOTWIN_MODEL:
+            _maybe_download_default_checkpoint(checkpoint_dir)
+
+        specified_path = f"{checkpoint_dir}/assets/"
+        if not os.path.isdir(specified_path):
+            raise FileNotFoundError(
+                f"Missing pi0.5 assets directory: {specified_path}. "
+                f"Download {DEFAULT_ROBOTWIN_HF_REPO} into {checkpoint_dir}."
+            )
         entries = os.listdir(specified_path)
+        if not entries:
+            raise FileNotFoundError(f"No asset id found under {specified_path}.")
         assets_id = entries[0]
 
         config = _config.get_config(self.train_config_name)
         self.policy = _policy_config.create_trained_policy(
             config,
-            f"policy/pi05/checkpoints/{self.train_config_name}/{self.model_name}/{self.checkpoint_id}",
+            checkpoint_dir,
             robotwin_repo_id=assets_id,
             )
         print("loading model success!")

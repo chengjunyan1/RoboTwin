@@ -7,7 +7,7 @@ seed: null
 instruction_type: unseen
 
 # Add Parameters You Need
-train_config_name: null
-model_name: null
+train_config_name: pi05_base_finetune_on_robotwin_clean_randomized_joint_training
+model_name: pi0.5_robotwin2
 checkpoint_id: 30000
-pi0_step: 50
+pi0_step: 32
