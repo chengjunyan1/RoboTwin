@@ -1,12 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PYTHON=${PYTHON:-python}
+
+if ! "$PYTHON" -m pip --version >/dev/null 2>&1; then
+    echo "Could not find pip for $($PYTHON -c 'import sys; print(sys.executable)')."
+    echo "Create the environment with: uv venv .venv/robotwin --python 3.10 --seed"
+    echo "Or add pip to the existing env with:"
+    echo "  uv pip install --python .venv/robotwin/bin/python pip setuptools wheel"
+    exit 1
+fi
+
 echo "Installing the necessary packages ..."
-pip install -r script/requirements.txt
+"$PYTHON" -m pip install -r script/requirements.txt
 
 echo "Installing pytorch3d ..."
-pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable" --no-build-isolation
+"$PYTHON" -m pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable" --no-build-isolation
 
 echo "Adjusting code in sapien/wrapper/urdf_loader.py ..."
 # location of sapien, like "~/.conda/envs/RoboTwin/lib/python3.10/site-packages/sapien"
-SAPIEN_LOCATION=$(pip show sapien | grep 'Location' | awk '{print $2}')/sapien
+SAPIEN_LOCATION=$("$PYTHON" -m pip show sapien | grep 'Location' | awk '{print $2}')/sapien
 # Adjust some code in wrapper/urdf_loader.py
 URDF_LOADER=$SAPIEN_LOCATION/wrapper/urdf_loader.py
 # ----------- before -----------
@@ -32,7 +45,7 @@ sed -i -E 's/("r")(\))( as)/\1, encoding="utf-8") as/g' $URDF_LOADER
 
 echo "Adjusting code in mplib/planner.py ..."
 # location of mplib, like "~/.conda/envs/RoboTwin/lib/python3.10/site-packages/mplib"
-MPLIB_LOCATION=$(pip show mplib | grep 'Location' | awk '{print $2}')/mplib
+MPLIB_LOCATION=$("$PYTHON" -m pip show mplib | grep 'Location' | awk '{print $2}')/mplib
 
 # Adjust some code in planner.py
 # ----------- before -----------
@@ -46,11 +59,15 @@ sed -i -E 's/(if np.linalg.norm\(delta_twist\) < 1e-4 )(or collide )(or not with
 
 echo "Installing Curobo ..."
 cd envs
-git clone --branch v0.7.8 --depth 1 https://github.com/NVlabs/curobo.git
+if [ ! -d curobo ]; then
+    git clone --branch v0.7.8 --depth 1 https://github.com/NVlabs/curobo.git
+else
+    echo "curobo already exists; reusing envs/curobo"
+fi
 cd curobo
-pip install -e . --no-build-isolation
-pip install warp-lang==1.12.0
-pip install setuptools==69.5.1
+"$PYTHON" -m pip install -e . --no-build-isolation
+"$PYTHON" -m pip install warp-lang==1.12.0
+"$PYTHON" -m pip install setuptools==69.5.1
 cd ../..
 
 echo "Installation basic environment complete!"
