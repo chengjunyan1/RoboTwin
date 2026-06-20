@@ -4,14 +4,13 @@
 # ============================================================================
 # Core Paths - MUST MODIFY THESE
 # ============================================================================
-robotwin_root: "/scratch/ows/argus/extern/RoboTwin"     # e.g., "/path/to/RoboTwin"
-uv_env: "/scratch/ows/argus/.venv/motus"             # uv virtualenv path
+robotwin_root: "..."     # e.g., "/path/to/RoboTwin"
+conda_env: "..."         # e.g., "/path/to/miniconda3/envs/RoboTwin"
+checkpoint_path: "..."   # (directory containing mp_rank_00_model_states.pt)
 
-# Pretrained model paths. HF repo ids are supported; Motus resolves only the
-# config/tokenizer files plus the WAN VAE/T5 files required by inference.
-checkpoint_path: "motus-robotics/Motus_robotwin2"       # local checkpoint dir/file or HF repo id
-wan_path: "Wan-AI/Wan2.2-TI2V-5B"
-vlm_path: "Qwen/Qwen3-VL-2B-Instruct"
+# Pretrained model paths (only for loading configs, not weights)
+wan_path: "..."          # e.g., "/path/to/Wan2.2-TI2V-5B"
+vlm_path: "..."    # e.g., "/path/to/Qwen3-VL-2B-Instruct"
 
 # ============================================================================
 # Optional Configuration

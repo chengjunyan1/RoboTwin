@@ -1,4 +1,5 @@
 models/
+!policy/Motus/models/
 data/*
 !data/process_stuck.py
 __pycache__/
