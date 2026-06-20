@@ -156,6 +156,7 @@ Benchmarking Generalizable Bimanual Manipulation: RoboTwin Dual-Arm Collaboratio
 }
 ```
 
+
 <b>RoboTwin</b>: Dual-Arm Robot Benchmark with Generative Digital Twins (early version), accepted to <i style="color: red; display: inline;"><b>ECCV Workshop 2024 (Best Paper Award)</b></i>
 ```
 @article{mu2024robotwin,

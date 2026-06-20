@@ -31,7 +31,7 @@ echo "Loading configuration from: $CONFIG_FILE"
 
 # Parse YAML (improved - remove comments and extra whitespace)
 ROBOTWIN_ROOT=$(grep "^robotwin_root:" "$CONFIG_FILE" | sed 's/#.*//' | sed 's/.*: *"\?\([^"]*\)"\?.*/\1/' | tr -d '"' | xargs)
-CONDA_ENV=$(grep "^conda_env:" "$CONFIG_FILE" | sed 's/#.*//' | sed 's/.*: *"\?\([^"]*\)"\?.*/\1/' | tr -d '"' | xargs)
+UV_ENV=$(grep "^uv_env:" "$CONFIG_FILE" | sed 's/#.*//' | sed 's/.*: *"\?\([^"]*\)"\?.*/\1/' | tr -d '"' | xargs)
 CHECKPOINT_PATH=$(grep "^checkpoint_path:" "$CONFIG_FILE" | sed 's/#.*//' | sed 's/.*: *"\?\([^"]*\)"\?.*/\1/' | tr -d '"' | xargs)
 WAN_PATH=$(grep "^wan_path:" "$CONFIG_FILE" | sed 's/#.*//' | sed 's/.*: *"\?\([^"]*\)"\?.*/\1/' | tr -d '"' | xargs)
 VLM_PATH=$(grep "^vlm_path:" "$CONFIG_FILE" | sed 's/#.*//' | sed 's/.*: *"\?\([^"]*\)"\?.*/\1/' | tr -d '"' | xargs)
@@ -45,6 +45,11 @@ TASK_CONFIG=${TASK_CONFIG:-"demo_randomized"}
 SEED=${SEED:-"42"}
 POLICY_NAME="Motus"
 
+is_hf_repo_id() {
+    local value="$1"
+    [[ "$value" != /* && "$value" != ./* && "$value" != ../* && "$value" == */* ]]
+}
+
 # ============================================================================
 # Validation
 # ============================================================================
@@ -53,8 +58,8 @@ if [ -z "$ROBOTWIN_ROOT" ]; then
     exit 1
 fi
 
-if [ -z "$CONDA_ENV" ]; then
-    echo "Error: conda_env is not set in $CONFIG_FILE"
+if [ -z "$UV_ENV" ]; then
+    echo "Error: uv_env is not set in $CONFIG_FILE"
     exit 1
 fi
 
@@ -78,34 +83,33 @@ if [ ! -d "$ROBOTWIN_ROOT" ]; then
     exit 1
 fi
 
-if [ ! -d "$CHECKPOINT_PATH" ]; then
+if [ ! -e "$CHECKPOINT_PATH" ] && ! is_hf_repo_id "$CHECKPOINT_PATH"; then
     echo "Error: Checkpoint not found: $CHECKPOINT_PATH"
     exit 1
 fi
 
-if [ ! -d "$WAN_PATH" ]; then
+if [ ! -d "$WAN_PATH" ] && ! is_hf_repo_id "$WAN_PATH"; then
     echo "Error: WAN path not found: $WAN_PATH"
     exit 1
 fi
 
-if [ ! -d "$VLM_PATH" ]; then
+if [ ! -d "$VLM_PATH" ] && ! is_hf_repo_id "$VLM_PATH"; then
     echo "Error: VLM path not found: $VLM_PATH"
     exit 1
 fi
 
 cd "$ROBOTWIN_ROOT" || exit 1
 
-# Activate conda
-if ! command -v conda &> /dev/null; then
-    echo "Error: conda not found."
+# Activate uv virtualenv
+if [ ! -x "$UV_ENV/bin/python" ]; then
+    echo "Error: uv virtualenv python not found: $UV_ENV/bin/python"
     exit 1
 fi
 
-eval "$(conda shell.bash hook)"
-conda activate "$CONDA_ENV"
+. "$UV_ENV/bin/activate"
 
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to activate conda environment: $CONDA_ENV"
+    echo "Error: Failed to activate uv virtualenv: $UV_ENV"
     exit 1
 fi
 
@@ -130,6 +134,7 @@ echo "GPU:               $GPU_ID"
 echo "----------------------------------------------------------------"
 echo "RoboTwin Root:     $ROBOTWIN_ROOT"
 echo "Policy Dir:        $POLICY_DIR"
+echo "uv Env:            $UV_ENV"
 echo "Checkpoint:        $CHECKPOINT_PATH"
 echo "WAN Path:          $WAN_PATH"
 echo "VLM Path:          $VLM_PATH"

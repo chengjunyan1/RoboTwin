@@ -13,6 +13,12 @@ from collections import deque
 import yaml
 from PIL import Image
 from transformers import AutoProcessor
+
+try:
+    from huggingface_hub import hf_hub_download, snapshot_download
+except ImportError:  # pragma: no cover - handled at runtime with a clearer error
+    hf_hub_download = None
+    snapshot_download = None
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -33,6 +39,79 @@ from utils.image_utils import resize_with_padding
 
 logger = logging.getLogger(__name__)
 
+
+def _looks_like_hf_repo_id(value: str) -> bool:
+    if not value:
+        return False
+    path = Path(value).expanduser()
+    return (
+        "/" in value
+        and not value.startswith(("/", "./", "../"))
+        and not path.exists()
+    )
+
+
+def _require_hf_hub() -> None:
+    if hf_hub_download is None or snapshot_download is None:
+        raise ImportError(
+            "huggingface_hub is required when checkpoint_path, wan_path, or vlm_path "
+            "is a Hugging Face repo id. Install it in the uv environment."
+        )
+
+
+def _resolve_hf_file(repo_id: str, filenames: List[str]) -> str:
+    _require_hf_hub()
+    last_error = None
+    for filename in filenames:
+        try:
+            return hf_hub_download(repo_id=repo_id, filename=filename)
+        except Exception as exc:  # Try the next common layout.
+            last_error = exc
+    candidates = ", ".join(filenames)
+    raise FileNotFoundError(
+        f"Could not resolve any of [{candidates}] from Hugging Face repo {repo_id}"
+    ) from last_error
+
+
+def _resolve_checkpoint_path(checkpoint_path: str) -> str:
+    path = Path(checkpoint_path).expanduser()
+    if path.exists():
+        return str(path)
+    if _looks_like_hf_repo_id(checkpoint_path):
+        return _resolve_hf_file(
+            checkpoint_path,
+            ["mp_rank_00_model_states.pt", "pytorch_model/mp_rank_00_model_states.pt"],
+        )
+    return checkpoint_path
+
+
+def _resolve_wan_assets(wan_path: str) -> Dict[str, str]:
+    path = Path(wan_path).expanduser()
+    if not _looks_like_hf_repo_id(wan_path):
+        return {
+            "config_path": str(path),
+            "vae_path": str(path / "Wan2.2_VAE.pth"),
+            "t5_checkpoint_path": str(path / "models_t5_umt5-xxl-enc-bf16.pth"),
+            "t5_tokenizer_path": str(path / "google" / "umt5-xxl"),
+        }
+
+    _require_hf_hub()
+    snapshot_dir = Path(snapshot_download(
+        repo_id=wan_path,
+        allow_patterns=[
+            "config.json",
+            "Wan2.2_VAE.pth",
+            "models_t5_umt5-xxl-enc-bf16.pth",
+            "google/umt5-xxl/*",
+        ],
+    ))
+    return {
+        "config_path": str(snapshot_dir),
+        "vae_path": str(snapshot_dir / "Wan2.2_VAE.pth"),
+        "t5_checkpoint_path": str(snapshot_dir / "models_t5_umt5-xxl-enc-bf16.pth"),
+        "t5_tokenizer_path": str(snapshot_dir / "google" / "umt5-xxl"),
+    }
+
 class MotusPolicy:
     """
     Motus Policy wrapper for RoboTwin evaluation.
@@ -41,8 +120,9 @@ class MotusPolicy:
     
     def __init__(self, checkpoint_path: str, config_path: str, wan_path: str, vlm_path: str, device: str = "cuda", log_dir: Optional[str] = None, task_name: Optional[str] = None):
         self.device = device
-        self.checkpoint_path = checkpoint_path
+        self.checkpoint_path = _resolve_checkpoint_path(checkpoint_path)
         self.wan_path = wan_path
+        self.wan_assets = _resolve_wan_assets(wan_path)
         self.vlm_path = vlm_path
         
         # Load configuration
@@ -57,8 +137,8 @@ class MotusPolicy:
             text_len=512,
             dtype=torch.bfloat16,
             device=device,
-            checkpoint_path=os.path.join(self.wan_path, 'models_t5_umt5-xxl-enc-bf16.pth'),
-            tokenizer_path=os.path.join(self.wan_path, 'google', 'umt5-xxl'),
+            checkpoint_path=self.wan_assets['t5_checkpoint_path'],
+            tokenizer_path=self.wan_assets['t5_tokenizer_path'],
         )
 
         # Initialize VLM processor from vlm_path (for tokenization only, weights from checkpoint)
@@ -120,8 +200,9 @@ class MotusPolicy:
         common = self.config_dict['common']
         model_cfg = self.config_dict['model']
 
-        # Use paths passed to constructor
-        vae_path = os.path.join(self.wan_path, "Wan2.2_VAE.pth")
+        # Use resolved local paths for assets that the WAN code opens directly.
+        vae_path = self.wan_assets["vae_path"]
+        wan_config_path = self.wan_assets["config_path"]
         vlm_checkpoint_path = self.vlm_path
 
         hidden_size = model_cfg['action_expert']['hidden_size']
@@ -129,9 +210,9 @@ class MotusPolicy:
 
         config = MotusConfig(
             # Paths for config loading only (no weights loaded)
-            wan_checkpoint_path=self.wan_path,
+            wan_checkpoint_path=wan_config_path,
             vae_path=vae_path,
-            wan_config_path=self.wan_path,
+            wan_config_path=wan_config_path,
             video_precision='bfloat16',
             vlm_checkpoint_path=vlm_checkpoint_path,
             
