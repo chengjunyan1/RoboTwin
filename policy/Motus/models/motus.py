@@ -380,8 +380,21 @@ class UndModule(nn.Module):
         # Get input embeddings
         inputs_embeds = self.vlm_model.get_input_embeddings()(input_ids_batch)
 
-        # Process images - handle different return formats between Qwen2.5-VL and Qwen3-VL
-        image_embeds, deepstack_image_embeds = self.vlm_model.get_image_features(pixel_values_batch, image_grid_thw_batch)
+        # Process images - handle different return formats between Qwen2.5-VL and Qwen3-VL.
+        image_outputs = self.vlm_model.get_image_features(
+            pixel_values_batch,
+            image_grid_thw_batch,
+            return_dict=True,
+        )
+        if hasattr(image_outputs, "pooler_output"):
+            image_embeds = image_outputs.pooler_output
+            deepstack_image_embeds = getattr(image_outputs, "deepstack_features", None)
+        elif isinstance(image_outputs, (list, tuple)) and len(image_outputs) >= 2:
+            image_embeds = image_outputs[-2] if len(image_outputs) > 2 else image_outputs[0]
+            deepstack_image_embeds = image_outputs[-1] if len(image_outputs) > 2 else image_outputs[1]
+        else:
+            image_embeds = image_outputs
+            deepstack_image_embeds = None
 
         image_embeds = torch.cat(image_embeds, dim=0).to(self.device, self.dtype)
 
@@ -393,14 +406,27 @@ class UndModule(nn.Module):
 
         visual_pos_masks = image_mask[..., 0]  # [B, seq_len] - visual positions only
 
-        # Compute position_ids (position_ids remains as original: [3, B, seq_len])
-        # Qwen3-VL get_rope_index has different signature: (input_ids, image_grid_thw, video_grid_thw, attention_mask)
-        position_ids, _rope_deltas = self.vlm_model.model.get_rope_index(
-            input_ids=input_ids_batch,
-            image_grid_thw=image_grid_thw_batch,
-            video_grid_thw=None,  # No video in current implementation
-            attention_mask=attention_mask_batch
-        )
+        # Compute position_ids (position_ids remains as original: [3, B, seq_len]).
+        # Newer Qwen3-VL also requires modality token ids: text=0, image=1, video=2.
+        mm_token_type_ids = torch.zeros_like(input_ids_batch, dtype=torch.int32)
+        mm_token_type_ids = mm_token_type_ids.masked_fill(visual_pos_masks, 1)
+        try:
+            position_ids, _rope_deltas = self.vlm_model.model.get_rope_index(
+                input_ids=input_ids_batch,
+                mm_token_type_ids=mm_token_type_ids,
+                image_grid_thw=image_grid_thw_batch,
+                video_grid_thw=None,  # No video in current implementation
+                attention_mask=attention_mask_batch,
+            )
+        except TypeError as exc:
+            if "mm_token_type_ids" not in str(exc):
+                raise
+            position_ids, _rope_deltas = self.vlm_model.model.get_rope_index(
+                input_ids=input_ids_batch,
+                image_grid_thw=image_grid_thw_batch,
+                video_grid_thw=None,  # No video in current implementation
+                attention_mask=attention_mask_batch,
+            )
 
         return inputs_embeds, attention_mask_batch, visual_pos_masks, deepstack_image_embeds, position_ids
     

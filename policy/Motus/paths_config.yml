@@ -5,12 +5,12 @@
 # Core Paths - MUST MODIFY THESE
 # ============================================================================
 robotwin_root: "/scratch/ows/argus/extern/RoboTwin"
-conda_env: "..."         # e.g., "/path/to/miniconda3/envs/RoboTwin"
-checkpoint_path: "..."   # (directory containing mp_rank_00_model_states.pt)
+conda_env: "/scratch/ows/argus/.venv/motus"
+checkpoint_path: "motus-robotics/Motus_robotwin2"
 
 # Pretrained model paths (only for loading configs, not weights)
-wan_path: "..."          # e.g., "/path/to/Wan2.2-TI2V-5B"
-vlm_path: "..."    # e.g., "/path/to/Qwen3-VL-2B-Instruct"
+wan_path: "/scratch/ows/argus/extern/X-WAM/checkpoints/wan22_5b"
+vlm_path: "Qwen/Qwen3-VL-2B-Instruct"
 
 # ============================================================================
 # Optional Configuration
