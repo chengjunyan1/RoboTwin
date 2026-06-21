@@ -15,6 +15,9 @@ task_config/
 # eval result
 eval_result/
 
+# logs
+logs/
+
 # Code Generation
 assets/*
 !assets/_download.py
